@@ -8,8 +8,10 @@ RASA_URL = "http://localhost:5005/webhooks/rest/webhook"
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
-st.title("💬 Chatbot SAEL com Streamlit")
-st.write("Converse com o assistente abaixo:")
+if "buttons" not in st.session_state:
+    st.session_state["buttons"] = []
+
+st.title("💬 Chatbot SAEL")
 
 for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"], avatar=msg["avatar"]):
@@ -26,18 +28,40 @@ if enviar and user_input.strip():
 
     if response.status_code == 200:
         bot_responses = response.json()
+        
+        buttons = []
         for bot_response in bot_responses:
             bot_message = bot_response.get("text", "Sem resposta")
-
             st.session_state["messages"].append({"role": "assistant", "avatar": "🤖", "content": bot_message})
-    else:
-        st.session_state["messages"].append({"role": "assistant", "avatar": "🤖", "content": "Erro ao conectar com o Rasa!"})
 
-    st.session_state.pop("user_input", None)
+            if "buttons" in bot_response:
+                buttons = bot_response["buttons"]
+
+        st.session_state["buttons"] = buttons
 
     st.rerun()
 
+if st.session_state["buttons"]:
+    st.write("Escolha uma opção:")
+    cols = st.columns(3)
+
+    for idx, button in enumerate(st.session_state["buttons"]):
+        if cols[idx % 3].button(button["title"]):
+            selected_payload = button["payload"]
+            
+            st.session_state["messages"].append({"role": "user", "avatar": "👤", "content": button["title"]})
+            response = requests.post(RASA_URL, json={"sender": "user", "message": selected_payload})
+
+            if response.status_code == 200:
+                bot_responses = response.json()
+                for bot_response in bot_responses:
+                    bot_message = bot_response.get("text", "Sem resposta")
+                    st.session_state["messages"].append({"role": "assistant", "avatar": "🤖", "content": bot_message})
+
+            st.session_state["buttons"] = []
+            st.rerun()
+
 if st.button("Limpar Conversa"):
     st.session_state["messages"] = []
-    st.session_state.pop("user_input", None)  
+    st.session_state["buttons"] = []
     st.rerun()
