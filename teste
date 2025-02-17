@@ -1,0 +1,91 @@
+import streamlit as st
+import requests
+import json
+
+# URL do Rasa (ajuste conforme necessário)
+RASA_URL = "http://localhost:5005/webhooks/rest/webhook"
+
+# Função para enviar mensagens ao Rasa
+def send_message_to_rasa(message):
+    """
+    Envia uma mensagem para o Rasa e retorna a resposta.
+    """
+    payload = {"sender": "user1", "message": message}
+    response = requests.post(RASA_URL, json=payload)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return [{"text": "Erro na comunicação com o Rasa."}]
+
+
+# Função para exibir a conversa (mensagens e botões)
+def display_conversation(messages):
+    """
+    Exibe as mensagens e botões na interface do Streamlit.
+    """
+    for msg in messages:
+        if 'text' in msg:
+            st.write(f"**Bot:** {msg['text']}")
+        if 'buttons' in msg:
+            for button in msg['buttons']:
+                st.button(
+                    button['title'],
+                    key=button['payload'],
+                    on_click=handle_button_click,
+                    args=(button['payload'],)
+                )
+
+
+# Função para lidar com o clique do botão
+def handle_button_click(payload):
+    """
+    Lida com o clique do botão e envia o payload ao Rasa.
+    """
+    rasa_response = send_message_to_rasa(payload)
+    display_conversation(rasa_response)
+
+
+# Função para iniciar a conversa automaticamente
+def start_conversation():
+    """
+    Inicia a conversa com uma mensagem inicial.
+    """
+    initial_message = "Olá! Como posso te ajudar?"  # Mensagem inicial
+    response = send_message_to_rasa(initial_message)
+    display_conversation(response)  # Exibe a resposta, incluindo botões
+
+
+# Configuração da página do Streamlit
+st.title("Bot SAEL (Sistema de Apoio ao Ensino de Lógica)")
+
+# Inicia a conversa automaticamente ao carregar a página
+if 'conversation' not in st.session_state:
+    st.session_state.conversation = []
+    start_conversation()
+
+# Entrada de mensagem do usuário
+user_input = st.text_input("Digite sua mensagem:", key="user_input")
+
+# Botão para enviar a mensagem
+if st.button('Enviar'):
+    if user_input:
+        # Envia a mensagem do usuário para o Rasa
+        rasa_response = send_message_to_rasa(user_input)
+        
+        # Armazena a mensagem do usuário e a resposta do bot no estado da sessão
+        st.session_state.conversation.append(f"**Você:** {user_input}")
+        st.session_state.conversation.extend([msg['text'] for msg in rasa_response if 'text' in msg])
+
+        # Exibe a conversa atualizada
+        display_conversation(rasa_response)
+
+        # Limpa a entrada do usuário
+        st.session_state.user_input = ""  # Limpa o campo de texto
+    else:
+        st.write("Por favor, insira uma mensagem.")
+
+# Exibe a conversa armazenada no estado da sessão
+st.write("### Histórico da Conversa:")
+for message in st.session_state.conversation:
+    st.write(message)
